@@ -22,7 +22,7 @@ def database(filename, url):
 @click.argument('filename')
 @click.option('--max', type=int, default=None)
 def binary(filename, max):
-    write_binary_file(filename, max=max)
+    write_binary_file(filename, max_postcodes=max)
 
 
 @cli.command()

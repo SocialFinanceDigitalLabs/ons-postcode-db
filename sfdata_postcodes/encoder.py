@@ -22,6 +22,7 @@ class IntContainer:
     def push(self, value, bits):
         if isinstance(value, IntContainer):
             value = value.value
+        assert value.bit_length() <= bits
         value &= 2 ** bits - 1
         value = (self.value << bits) | value
         return IntContainer(value)

@@ -1,24 +1,30 @@
+import bz2
 import io
+import json
 from dataclasses import dataclass
+from struct import unpack, calcsize
 
 from sfdata_postcodes.binary_geo import ENDIAN
-from sfdata_postcodes.encoder import decode_outcode, decode_incode, encode_outcode, encode_incode, IntContainer
+from sfdata_postcodes.encoder import decode_outcode, decode_incode, encode_incode, IntContainer
+
+INCODE_BLOCK_SIZE = 6
 
 
-def read_locations(f):
-    location_length = int.from_bytes(f.read(2), ENDIAN)
-    locations = {}
-    for ix in range(location_length):
-        locations[ix] = {
-            "country": _read_string(f),
-            "county": _read_string(f),
-            "ed":_read_string(f),
-            "lad": _read_string(f),
-            "lat": int.from_bytes(f.read(3), ENDIAN, signed=True),
-            "lon": int.from_bytes(f.read(3), ENDIAN, signed=True),
-        }
-    return locations
+def read_metadata(f):
+    metadata_length = unpack("I", f.read(calcsize("I")))[0]
+    metadata = bz2.decompress(f.read(metadata_length))
+    metadata = json.loads(metadata)
 
+    outcodes = OutcodeContainer()
+    for oc in metadata['outcodes']:
+        outcodes.add(oc['outcode'], oc['incode_count'])
+
+    metadata['outcodes'] = outcodes
+
+    loc_len = len(metadata['locations'])
+    print(f"{loc_len} locations, requiring an index size of {loc_len.bit_length()} bits")
+
+    return metadata
 
 @dataclass
 class Outcode:
@@ -69,35 +75,22 @@ def read_outcodes(f):
 def read_binary_file():
 
     with open("test.bin", 'rb') as f:
-        locations = read_locations(f)
-        outcodes = read_outcodes(f)
+        metadata = read_metadata(f)
+        outcodes = metadata['outcodes']
+        locations = metadata['locations']
 
         index = -1
-        while bytes := bytearray(f.read(8)):
+        while bytes := bytearray(f.read(INCODE_BLOCK_SIZE)):
             index = index+1
             ctr = IntContainer(int.from_bytes(bytes, ENDIAN))
-            incode, loc_ix, lat, lon = ctr.parts(11, 16, 16)
+
+            incode, loc_ix, lat, lon = ctr.parts(16, 9, 9)
             incode = decode_incode(incode)
-            # location = locations[loc_ix.value]
+            loc = locations[loc_ix.value]
+
             outcode = outcodes.find_outcode(index)
+            print(f"{outcode.outcode} {incode}, {loc_ix}, {lat}, {lon}")
 
-            print(f"{outcode.outcode} {incode}")
-
-
-def seek_outcode(f, start, end):
-    pos = 3 * int((end - start) / 6)
-    if pos == start:
-        return None
-    f.seek(start+pos, io.SEEK_SET)
-    while start <= f.tell() <= end:
-        bytes = bytearray(f.read(3))
-        if bytes[0] >> 7 == 1:
-            bytes[0] = bytes[0] & 0b01111111
-            return int.from_bytes(bytes, ENDIAN), start+pos
-        f.seek(-6, io.SEEK_CUR)
-    return None
-
-INCODE_BLOCK_SIZE = 8
 
 
 def seek_incode(f, start, end):
@@ -108,34 +101,26 @@ def seek_incode(f, start, end):
     while start <= f.tell() <= end:
         bytes = f.read(INCODE_BLOCK_SIZE)
         ctr = IntContainer(int.from_bytes(bytes, ENDIAN))
-        return start+pos, *ctr.parts(11, 16, 16)
+        return start+pos, *ctr.parts(16, 9, 9)
 
     return None
-
-
-def _read_string(f):
-    s = b''
-    while b := f.read(1):
-        if b == b'\0':
-            break
-        s += b
-    return s.decode('ASCII')
 
 
 def find_pc(pc):
     outcode, incode = pc.split(" ", 1)
 
     with open("test.bin", 'rb') as f:
-        locations = read_locations(f)
-        outcodes = read_outcodes(f)
+        metadata = read_metadata(f)
+        locations = metadata['locations']
+        outcodes = metadata['outcodes']
 
         start = f.tell()
 
         oc = outcodes[outcode]
         print(oc)
 
-        start = start + oc.start*8
-        end = start + oc.incode_count*8
+        start = start + oc.start * INCODE_BLOCK_SIZE
+        end = start + oc.incode_count * INCODE_BLOCK_SIZE
 
         incode = encode_incode(incode).value
         while result := seek_incode(f, start, end):
@@ -153,8 +138,8 @@ def find_pc(pc):
     incode = decode_incode(result[1])
     location = locations[result[2].value]
     lat, lon = result[3:]
-    lat = (lat.value + location['lat']) / 10000
-    lon = (lon.value + location['lon']) / 10000
+    lat = lat.value / 10000 * 4 + location['lat']
+    lon = lon.value / 10000 * 4 + location['lon']
 
     print("Value found", outcode, incode, location, lat, lon)
 

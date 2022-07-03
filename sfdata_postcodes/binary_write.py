@@ -1,9 +1,11 @@
-
+import bz2
 import csv
-from dataclasses import dataclass, field
+import json
+from dataclasses import dataclass, field, asdict
 from functools import cached_property
 
 from io import TextIOWrapper
+from struct import pack
 
 from zipfile import ZipFile
 
@@ -58,7 +60,7 @@ class Row:
     @cached_property
     def spatial_key(self):
         return SpatialKey(self.country, self.county, self.electoral_division,
-                          self.local_authority_district, self.imd)
+                          self.local_authority_district, self.imd, int(self.latitude*10), int(self.longitude*10))
 
 
 @dataclass(frozen=True)
@@ -68,6 +70,9 @@ class SpatialKey:
     electoral_division: str
     local_authority_district: str
     imd: int
+    x: int
+    y: int
+
 
 
 @dataclass(frozen=True)
@@ -136,58 +141,45 @@ def read_zip_file(filename, max_postcodes=None):
     return dict(postcodes=postcodes, locations=locations)
 
 
-def _write_string(f, s):
-    if s:
-        f.write(s.encode('ASCII'))
-    f.write(b'\0')
-
-
-def write_binary_file(zipfilename, outfilename="test.bin", max=None):
-    data = read_zip_file(zipfilename, max_postcodes=max)
+def write_binary_file(zipfilename, outfilename="test.bin", max_postcodes=None):
+    data = read_zip_file(zipfilename, max_postcodes=max_postcodes)
     postcodes = data["postcodes"]
-    locations = data["locations"]
 
-    outcodes = [(outcode, encode_outcode(outcode)) for outcode in postcodes.keys()]
-    outcodes.sort(key=lambda x: x[1])
+    outcodes = sorted(postcodes.keys())
+
+    locations = data["locations"]
+    sorted_locations = sorted(locations.values(), key=lambda x: x.index)
+
+    loc_length = len(locations)
+    print(f" {loc_length} location Indexes requiring {loc_length.bit_length()} bits")
+    assert loc_length.bit_length() <= 16, "Location index must be 16 bits"
 
     with open(outfilename, 'wb') as f:
+        metadata = dict(
+            outcodes=[dict(outcode=oc, incode_count=len(postcodes[oc])) for oc in outcodes],
+            locations=[{"lat": loc.min[0], "lon": loc.min[1], **asdict(loc.key)} for loc in sorted_locations],
+        )
+        metadata = bz2.compress(bytes(json.dumps(metadata), 'ASCII'))
+        f.write(pack('I', len(metadata)))
+        f.write(metadata)
 
-        sorted_locations = sorted(locations.values(), key=lambda x: x.index)
-        f.write(len(locations).to_bytes(2, ENDIAN))
-        for location in sorted_locations:
-            key = location.key
-            _write_string(f, key.country)
-            _write_string(f, key.county)
-            _write_string(f, key.electoral_division)
-            _write_string(f, key.local_authority_district)
-
-            min = location.min
-            if min[0]:
-                lat, lon = int(min[0]*10000), int(min[1]*10000)
-            else:
-                lat = lon = 0
-            f.write(lat.to_bytes(3, ENDIAN, signed=True))
-            f.write(lon.to_bytes(3, ENDIAN, signed=True))
-
-        f.write(len(outcodes).to_bytes(2, ENDIAN))
-        for outcode, outcode_enc in outcodes:
-            f.write(outcode_enc.to_bytes(3, ENDIAN))
-            f.write(len(postcodes[outcode]).to_bytes(2, ENDIAN))
-
-        for outcode, outcode_enc in tqdm(outcodes):
+        for outcode in tqdm(outcodes):
             for postcode in postcodes[outcode]:
                 loc = locations[postcode.spatial_key]
                 lat_min, lon_min = loc.min
 
-                lat = int((postcode.latitude - lat_min) * 10000) if postcode.latitude and lat_min else 0
-                lon = int((postcode.longitude - lon_min) * 10000) if postcode.longitude and lon_min else 0
+                lat = int((postcode.latitude - lat_min) * 10000 / 4) if postcode.latitude and lat_min else 0
+                lon = int((postcode.longitude - lon_min) * 10000 / 4) if postcode.longitude and lon_min else 0
+
+                assert max(lat, lon).bit_length() <= 9, f"Latitude ({lat}) and longitude ({lon}) must be 9 bits. " \
+                                                        f"This value requires {max(lat, lon).bit_length()} bits"
 
                 value = (
-                    encode_incode(postcode.incode)
-                    .push(loc.index, 11)
-                    .push(lat, 16)
-                    .push(lon, 16)
+                    encode_incode(postcode.incode)  # 14 bits
+                    .push(loc.index, 16)  # 30
+                    .push(lat, 9)  # 39
+                    .push(lon, 9)  # 48
                 )
 
-                f.write(value.to_bytes(8, ENDIAN))
+                f.write(value.to_bytes(6, ENDIAN))  # Max capacity 48 bits
 

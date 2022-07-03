@@ -149,6 +149,14 @@ optional = false
 python-versions = "*"
 
 [[package]]
+name = "burrowswheeler"
+version = "1.0"
+description = "Python implementation of the Burrows-Wheeler transform"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[[package]]
 name = "certifi"
 version = "2022.6.15"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -204,6 +212,14 @@ description = "Composable style cycles"
 category = "dev"
 optional = false
 python-versions = ">=3.6"
+
+[[package]]
+name = "dahuffman"
+version = "0.4.1"
+description = "Pure Python Huffman encoder and decoder module"
+category = "main"
+optional = false
+python-versions = "*"
 
 [[package]]
 name = "dash"
@@ -1795,7 +1811,7 @@ testing = ["pytest (>=6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytest-
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "238a00694d364d0effa2c264335a510400380348c087e285f0d4d22b6a2ba305"
+content-hash = "e460365d6a77fcc1f8c0d7e13b8f2f290e89394d966cf15394ccf538bce3f822"
 
 [metadata.files]
 anyio = [
@@ -1925,6 +1941,10 @@ brotli = [
     {file = "Brotli-1.0.9-pp37-pypy37_pp73-win_amd64.whl", hash = "sha256:76ffebb907bec09ff511bb3acc077695e2c32bc2142819491579a695f77ffd4d"},
     {file = "Brotli-1.0.9.zip", hash = "sha256:4d1b810aa0ed773f81dceda2cc7b403d01057458730e309856356d4ef4188438"},
 ]
+burrowswheeler = [
+    {file = "burrowswheeler-1.0-py3-none-any.whl", hash = "sha256:19ad9fd6d6679fd4e82357051f11a52f95379fa6b719e03649ca27fd5077a1d6"},
+    {file = "burrowswheeler-1.0.tar.gz", hash = "sha256:1dd434b7d9127552833c86abc09d938438bb4505ef6d022dbc51e86dbd273d8c"},
+]
 certifi = [
     {file = "certifi-2022.6.15-py3-none-any.whl", hash = "sha256:fe86415d55e84719d75f8b69414f6438ac3547d2078ab91b67e779ef69378412"},
     {file = "certifi-2022.6.15.tar.gz", hash = "sha256:84c85a9078b11105f04f3036a9482ae10e4621616db313fe045dd24743a0820d"},
@@ -1996,6 +2016,10 @@ colorama = [
 cycler = [
     {file = "cycler-0.11.0-py3-none-any.whl", hash = "sha256:3a27e95f763a428a739d2add979fa7494c912a32c17c4c38c4d5f082cad165a3"},
     {file = "cycler-0.11.0.tar.gz", hash = "sha256:9c87405839a19696e837b3b818fed3f5f69f16f1eec1a1ad77e043dcea9c772f"},
+]
+dahuffman = [
+    {file = "dahuffman-0.4.1-py2.py3-none-any.whl", hash = "sha256:c818757a6b852810ac88aa127612453b69da95a57de0cc44f1975e5a6be149ab"},
+    {file = "dahuffman-0.4.1.tar.gz", hash = "sha256:19b6122a6bc9664a1179726c28e415ffc862f8e7571289ea906fd77d7872e45d"},
 ]
 dash = [
     {file = "dash-2.5.1-py3-none-any.whl", hash = "sha256:1b9110bcde7559a8405095901d4f7cfcfd18054b0c9758ec8562b3977824fbfe"},
