@@ -1,8 +1,9 @@
 import click
 from sqlalchemy import create_engine
 
-from .binary_read import read_binary_file, find_pc
+from sfdata_postcodes.binfile.reader import PostcodeFile
 from sfdata_postcodes.rdb.populate_rdb import create_database
+from sfdata_postcodes.util import PropContainer
 
 
 @click.group()
@@ -31,7 +32,11 @@ def create_binfile(datafile, output, max):
 @cli.command()
 @click.option('--infile', '-i', type=click.Path(exists=True), default='postcodes.bin')
 def read(infile):
-    read_binary_file(infile)
+    postcodes = PostcodeFile(infile)
+    for pc in postcodes:
+        pc = PropContainer(pc)
+        print(f"{pc} {pc.country.name} {pc.county.name} {pc.electoral_division.name} "
+              f"{pc.local_authority_district.name} {pc.imd} {pc.urban_rural.name} {pc.google}")
 
 
 @cli.command()
@@ -39,7 +44,19 @@ def read(infile):
 @click.argument('incode')
 @click.option('--infile', '-i', type=click.Path(exists=True), default='postcodes.bin')
 def seek(infile, outcode, incode):
-    find_pc(infile, outcode, incode)
+    postcodes = PostcodeFile(infile)
+
+    pc = postcodes.exact(f"{outcode} {incode}")
+
+    print("  Country: ", pc.country.name)
+    print("  County: ", pc.county.name)
+    print("  Electoral Division: ", pc.electoral_division.name)
+    print("  LA: ", pc.local_authority_district.name)
+    print("  IMD: ", pc.imd)
+    print("  Urban/Rural: ", pc.urban_rural.name)
+
+    print(f"  GEO: {pc.latitude:0.5f} {pc.longitude:0.5f}")
+    print(f"  {pc.google}")
 
 
 cli()

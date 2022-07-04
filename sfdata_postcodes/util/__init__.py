@@ -30,3 +30,26 @@ class PCEncoder(JSONEncoder):
         elif isinstance(o, Decimal):
             return float(o)
         return JSONEncoder.default(self, o)
+
+
+class PropContainer:
+
+    def __init__(self, value):
+        self._value = value
+
+    def __getattr__(self, name):
+        if self._value is None:
+            return PropContainer(None)
+
+        try:
+            return PropContainer(self._value[name])
+        except (KeyError, TypeError):
+            pass
+
+        if hasattr(self._value, name):
+            return PropContainer(getattr(self._value, name))
+
+        return PropContainer(None)
+
+    def __str__(self):
+        return str(self._value)

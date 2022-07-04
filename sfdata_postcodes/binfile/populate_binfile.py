@@ -1,16 +1,30 @@
 import bz2
 import json
+from dataclasses import asdict
 from struct import pack
 from zipfile import ZipFile
 
 from tqdm import tqdm
 
 from sfdata_postcodes.data import read_all, read_postcodes, CodeContainer
+from sfdata_postcodes.data.bindata import BinarySpec, BinaryField
 from sfdata_postcodes.data.spatial import SpatialKey, SpatialContainer
 from sfdata_postcodes.encoder import IntContainer
 from sfdata_postcodes.util import no_none, PCEncoder
 
 ENDIAN = 'big'
+
+DATA_SPEC = BinarySpec(
+    byte_length=6,
+    fields=[
+        BinaryField(name='incode_key', bit_length=12),
+        BinaryField(name='spatial_key', bit_length=16),
+        BinaryField(name='latitude', bit_length=8),
+        BinaryField(name='longitude', bit_length=8),
+        BinaryField(name='urban_rural', bit_length=4),
+    ]
+)
+assert sum([f.bit_length for f in DATA_SPEC.fields]) <= DATA_SPEC.byte_length * 8
 
 
 def create_binfile(infilename, outfilename, max_postcodes=None):
@@ -49,6 +63,7 @@ def create_binfile(infilename, outfilename, max_postcodes=None):
         urc = all_codes['urban_rural_classification']
 
         metadata = dict(
+            data_spec=asdict(DATA_SPEC),
             outcodes={oc.id: {'outcode': oc.code, 'incode_count': len(outcodes[oc.code])} for oc in oc_container},
             incodes=ic_container,
             locations={
@@ -76,9 +91,6 @@ def create_binfile(infilename, outfilename, max_postcodes=None):
         f.write(pack('I', len(metadata)))
         f.write(metadata)
 
-        assert len(locations_container).bit_length() <= 16, "Too many locations - must fit in 16 bits"
-
-
         progress = tqdm(oc_container, desc='Writing postcodes')
         for oc in progress:
             incodes = outcodes[oc.code]
@@ -92,20 +104,14 @@ def create_binfile(infilename, outfilename, max_postcodes=None):
                     if ic_row.longitude and loc.lon_min and loc.lon_scale else 0
 
                 urban_rural = loc.urban_rural.index(ic_row.urban_rural_classification)
-                assert urban_rural.bit_length() <= 4, "Too many urban/rural classes - must fit in 4 bits"
-
-                assert max(lat, lon).bit_length() <= 8, f"Latitude ({lat}) and longitude ({lon}) must be 8 bits. " \
-                                                        f"This value requires {max(lat, lon).bit_length()} bits"
-
-                assert incode_key.bit_length() <= 12, f"Incode key ({incode_key}) must be less than 12 bits. "
                 value = (
                     IntContainer(0)
-                    .push(incode_key, 12)  # 12 bits
-                    .push(locations_container.get_id(spatial_key), 16)  # 28
-                    .push(lat, 8)  # 36
-                    .push(lon, 8)  # 44
-                    .push(urban_rural, 4)  # 48
+                    .push(incode_key, DATA_SPEC['incode_key'].bit_length)
+                    .push(locations_container.get_id(spatial_key), DATA_SPEC['spatial_key'].bit_length)
+                    .push(lat, DATA_SPEC['latitude'].bit_length)
+                    .push(lon, DATA_SPEC['longitude'].bit_length)
+                    .push(urban_rural, DATA_SPEC['urban_rural'].bit_length)
                 )
 
-                f.write(value.to_bytes(6, ENDIAN))  # Max capacity 48 bits
+                f.write(value.to_bytes(DATA_SPEC.byte_length, ENDIAN))
 
