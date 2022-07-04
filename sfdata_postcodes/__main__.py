@@ -47,6 +47,7 @@ def seek(infile, outcode, incode):
     postcodes = PostcodeFile(infile)
 
     pc = postcodes.exact(f"{outcode} {incode}")
+    pc = PropContainer(pc)
 
     print("  Country: ", pc.country.name)
     print("  County: ", pc.county.name)

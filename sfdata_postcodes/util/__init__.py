@@ -51,5 +51,10 @@ class PropContainer:
 
         return PropContainer(None)
 
+    def __format__(self, format_spec):
+        if self._value is None:
+            return ''
+        return format(self._value, format_spec)
+
     def __str__(self):
         return str(self._value)
