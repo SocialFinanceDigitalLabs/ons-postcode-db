@@ -22,7 +22,7 @@ class IntContainer:
     def push(self, value, bits):
         if isinstance(value, IntContainer):
             value = value.value
-        assert value.bit_length() <= bits
+        assert value.bit_length() <= bits, 'Value {} is too large to fit in {} bits'.format(value, bits)
         value &= 2 ** bits - 1
         value = (self.value << bits) | value
         return IntContainer(value)

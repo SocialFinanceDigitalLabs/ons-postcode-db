@@ -16,15 +16,20 @@ def read_metadata(f):
     metadata = json.loads(metadata)
 
     outcodes = OutcodeContainer()
-    for oc in metadata['outcodes']:
+    for oc in metadata['outcodes'].values():
         outcodes.add(oc['outcode'], oc['incode_count'])
-
     metadata['outcodes'] = outcodes
 
-    loc_len = len(metadata['locations'])
-    print(f"{loc_len} locations, requiring an index size of {loc_len.bit_length()} bits")
+    metadata['incodes'] = {int(k): v for k, v in metadata['incodes'].items()}
+    metadata['locations'] = {int(k): v for k, v in metadata['locations'].items()}
+    metadata['country'] = {int(k): v for k, v in metadata['country'].items()}
+    metadata['county'] = {int(k): v for k, v in metadata['county'].items()}
+    metadata['electoral_division'] = {int(k): v for k, v in metadata['electoral_division'].items()}
+    metadata['local_authority_district'] = {int(k): v for k, v in metadata['local_authority_district'].items()}
+    metadata['urban_rural_classification'] = {int(k): v for k, v in metadata['urban_rural_classification'].items()}
 
     return metadata
+
 
 @dataclass
 class Outcode:
@@ -72,11 +77,12 @@ def read_outcodes(f):
     return outcodes
 
 
-def read_binary_file():
+def read_binary_file(infile):
 
-    with open("test.bin", 'rb') as f:
+    with open(infile, 'rb') as f:
         metadata = read_metadata(f)
         outcodes = metadata['outcodes']
+        incodes = metadata['incodes']
         locations = metadata['locations']
 
         index = -1
@@ -84,13 +90,13 @@ def read_binary_file():
             index = index+1
             ctr = IntContainer(int.from_bytes(bytes, ENDIAN))
 
-            incode, loc_ix, lat, lon = ctr.parts(16, 9, 9)
-            incode = decode_incode(incode)
-            loc = locations[loc_ix.value]
+            incode_ix, loc_ix, lat, lon, urb = ctr.parts(16, 8, 8, 4)
+
+            incode = incodes[str(incode_ix)]
+            loc = locations[str(loc_ix.value)]
 
             outcode = outcodes.find_outcode(index)
-            print(f"{outcode.outcode} {incode}, {loc_ix}, {lat}, {lon}")
-
+            print(f"{outcode.outcode} {incode['code']}, {loc}, {lat}, {lon}")
 
 
 def seek_incode(f, start, end):
@@ -101,32 +107,32 @@ def seek_incode(f, start, end):
     while start <= f.tell() <= end:
         bytes = f.read(INCODE_BLOCK_SIZE)
         ctr = IntContainer(int.from_bytes(bytes, ENDIAN))
-        return start+pos, *ctr.parts(16, 9, 9)
+        return start+pos, *ctr.parts(16, 8, 8, 4)
 
     return None
 
 
-def find_pc(pc):
-    outcode, incode = pc.split(" ", 1)
+def find_pc(infile, outcode, incode):
 
-    with open("test.bin", 'rb') as f:
+    with open(infile, 'rb') as f:
         metadata = read_metadata(f)
         locations = metadata['locations']
         outcodes = metadata['outcodes']
+        incodes = metadata['incodes']
+        incodes_rev = {ic['code']: k for k, ic in incodes.items()}
 
         start = f.tell()
 
         oc = outcodes[outcode]
-        print(oc)
 
         start = start + oc.start * INCODE_BLOCK_SIZE
         end = start + oc.incode_count * INCODE_BLOCK_SIZE
 
-        incode = encode_incode(incode).value
+        incode_ix = incodes_rev[incode]
         while result := seek_incode(f, start, end):
-            if result[1] < incode:
+            if result[1] < incode_ix:
                 start = result[0]
-            elif result[1] > incode:
+            elif result[1] > incode_ix:
                 end = result[0]
             else:
                 break
@@ -135,11 +141,32 @@ def find_pc(pc):
         print("Value not found")
         return
 
-    incode = decode_incode(result[1])
+    incode = incodes[result[1]]
     location = locations[result[2].value]
-    lat, lon = result[3:]
-    lat = lat.value / 10000 * 4 + location['lat']
-    lon = lon.value / 10000 * 4 + location['lon']
 
-    print("Value found", outcode, incode, location, lat, lon)
+    lat, lon = result[3:5]
+    lat = lat.value * location['lat_scale'] / 255 + location['lat']
+    lon = lon.value * location['lon_scale'] / 255 + location['lon']
+
+    urban_rural = location['urban_rural'][result[5].value]
+
+    print("Found postcode: ", outcode, incode['code'])
+
+    ctry = metadata['country']
+    cty = metadata['county']
+    ed = metadata['electoral_division']
+    lad = metadata['local_authority_district']
+    urc = metadata['urban_rural_classification']
+
+    print("  Country: ", ctry[location['country']])
+    print("  County: ", cty[location['county']])
+    print("  Electoral Division: ", ed[location['electoral_division']])
+    print("  LA: ", lad[location['local_authority_district']])
+    print("  IMD: ", location['imd'])
+    print("  Urban/Rural: ", urc[urban_rural])
+
+    print(f"  GEO: {lat:0.5f} {lon:0.5f}")
+    print(f"  https://www.google.com/maps/search/{lat:0.5f},{lon:0.5f}/")
+
+    # print("Value found", outcode, incode['code'], location, lat, lon)
 

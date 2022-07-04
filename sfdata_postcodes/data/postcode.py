@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from decimal import Decimal
+from functools import cached_property
 
 from sfdata_postcodes.util import safe
 
@@ -16,16 +17,20 @@ class PostcodeRow:
     osgrid_east: int
     osgrid_north: int
     osgrid_quality: int
-    latitude: Decimal
-    longitude: Decimal
+    latitude: float
+    longitude: float
 
-    @property
+    @cached_property
+    def pc_parts(self):
+        return self.pcd.split(' ')
+
+    @cached_property
     def outcode(self):
-        return self.pcd.split(" ", 1)[0]
+        return self.pc_parts[0]
 
-    @property
+    @cached_property
     def incode(self):
-        return self.pcd.split(" ", 1)[1]
+        return self.pc_parts[1]
 
     @classmethod
     def from_row(cls, row):
@@ -39,7 +44,7 @@ class PostcodeRow:
             osgrid_quality=safe(int, row[13]),
             country=row[16],
             urban_rural_classification=row[40],
-            latitude=safe(Decimal, row[42]),
-            longitude=safe(Decimal, row[43]),
+            latitude=safe(float, row[42]),
+            longitude=safe(float, row[43]),
             imd=safe(int, row[47]),
         )

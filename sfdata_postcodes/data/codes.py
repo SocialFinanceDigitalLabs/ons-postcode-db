@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from sfdata_postcodes.util import no_none
+
 
 @dataclass(frozen=True)
 class CodeRow:
@@ -33,6 +35,18 @@ class CodeContainer:
 
         return cr
 
+    def get_code(self, item):
+        try:
+            return self[item].code
+        except (KeyError, AttributeError):
+            return None
+
+    def get_id(self, item):
+        try:
+            return self[item].id
+        except (KeyError, AttributeError):
+            return None
+
     def __getitem__(self, item):
         if isinstance(item, int):
             return self._codes[item]
@@ -45,14 +59,5 @@ class CodeContainer:
     def __iter__(self):
         return iter(self._codes)
 
-    def get_code(self, item):
-        try:
-            return self[item].code
-        except (KeyError, AttributeError):
-            return None
-
-    def get_id(self, item):
-        try:
-            return self[item].id
-        except (KeyError, AttributeError):
-            return None
+    def __json__(self):
+        return {c.id: no_none(code=c.code, name=c.name) for c in sorted(self._codes, key=lambda c: c.id)}

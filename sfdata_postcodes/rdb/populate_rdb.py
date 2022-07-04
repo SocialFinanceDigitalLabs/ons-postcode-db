@@ -1,36 +1,32 @@
 from dataclasses import asdict
 from zipfile import ZipFile
 
-from sfdata_postcodes.data import read_all, CodeContainer
-from sfdata_postcodes.data.postcode import PostcodeRow
+from sfdata_postcodes.data import read_all, CodeContainer, read_postcodes
 from sfdata_postcodes.rdb import tables
 
-from sfdata_postcodes import spec
-from sfdata_postcodes.zipfile import read_csv_with_progress
 
-
-def read_file(filename, engine, max_postcodes=None):
+def create_database(filename, engine, max_postcodes=None):
     tables.metadata_obj.create_all(engine)
     with engine.connect() as conn:
 
         with ZipFile(filename, 'r') as zipfile:
             all_codes = read_all(zipfile)
 
-            populate_table(conn, tables.country, all_codes['country'])
-            populate_table(conn, tables.county, all_codes['county'])
-            populate_table(conn, tables.electoral_division, all_codes['electoral_division'])
-            populate_table(conn, tables.local_authority_district, all_codes['local_authority_district'])
-            populate_table(conn, tables.urban_rural_classification, all_codes['urban_rural_classification'])
+            _populate_table(conn, tables.country, all_codes['country'])
+            _populate_table(conn, tables.county, all_codes['county'])
+            _populate_table(conn, tables.electoral_division, all_codes['electoral_division'])
+            _populate_table(conn, tables.local_authority_district, all_codes['local_authority_district'])
+            _populate_table(conn, tables.urban_rural_classification, all_codes['urban_rural_classification'])
 
-            populate_postcodes(zipfile, conn, all_codes, max_postcodes=max_postcodes)
+            _populate_postcodes(zipfile, conn, all_codes, max_postcodes=max_postcodes)
 
 
-def populate_table(conn, table, dataset):
+def _populate_table(conn, table, dataset):
     data_list = [asdict(c) for c in dataset]
     conn.execute(table.insert().prefix_with('OR REPLACE'), data_list)
 
 
-def populate_postcodes(zipfile, conn, all_codes, max_postcodes=None):
+def _populate_postcodes(zipfile, conn, all_codes, max_postcodes=None):
     incodes = CodeContainer()
     outcodes = CodeContainer()
     ctry = all_codes['country']
@@ -41,13 +37,8 @@ def populate_postcodes(zipfile, conn, all_codes, max_postcodes=None):
 
     pc_list = []
 
-    postcodes = read_csv_with_progress(zipfile, spec.POSTCODE_FILE)
-
-    for ix, row in enumerate(postcodes):
-        if max_postcodes and ix >= max_postcodes:
-            break
-
-        data = PostcodeRow.from_row(row)
+    postcodes = read_postcodes(zipfile, max_postcodes=max_postcodes)
+    for data in postcodes:
 
         oc = outcodes.add(data.outcode)
         ic = incodes.add(data.incode)
