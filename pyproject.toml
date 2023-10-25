@@ -18,7 +18,7 @@ jupyterlab = "^3.4.3"
 ipython-sql = "^0.4.1"
 kaleido = "0.2.1"
 pandas = "^1.4.3"
-dtale = "^2.6.0"
+dtale = "^3.7.0"
 pytest = "^7.1.2"
 geopy = "^2.2.0"
 
